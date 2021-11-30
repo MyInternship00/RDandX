@@ -1,7 +1,7 @@
 
-const Logger = require('./utils/logger');
-const {connectDatabase} = require('./databases/database');
-const {initializeScrapper} = require('./scrapper');
+const Logger = require('./src/utils/logger');
+const {connectDatabase} = require('./src/databases/database');
+const {initializeScrapper} = require('./src/scrapper');
 
 const initialize = async()=>{
     await connectDatabase();

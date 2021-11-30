@@ -49,7 +49,8 @@ const initializeScrapper = (async (attempt = 0) => {
 const fetchSections = async (sectionIndex = 0) => {
     try {
         if (sectionIndex > sections.length - 1) {
-            return Logger.info('Fetched all sections');
+             Logger.info('Fetched all sections');
+             return process.exit(0);
         }
         const section = sections[sectionIndex];
         if (!section.subUrl) fetchSections(++sectionIndex);
