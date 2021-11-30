@@ -3,6 +3,7 @@ const puppeteer = require('puppeteer');
 const axios = require("axios");
 const Logger = require('./utils/logger');
 
+const PAGE_NAVIGATION_TIMEOUT = 30000; 
 
 const PUPPETEER_OPTIONS = {
     headers: {
@@ -14,7 +15,7 @@ const PUPPETEER_OPTIONS = {
 
 const MAX_RETRY = 5;
 const BASE_LINK = "https://www.firstpost.com/";
-const sections = [{ subUrl: '/', maxPagination: 5 }, { subUrl: '/category/sports', maxPagination: 5 }, { subUrl: '/category/business', maxPagination: 5 }];
+const sections = [{ subUrl: '/', maxPagination: 1 }, { subUrl: '/category/sports', maxPagination: 1 }, { subUrl: '/category/business', maxPagination: 5 }];
 
 let BROWSER;
 let headLinePge;
@@ -58,7 +59,7 @@ const fetchSections = async (sectionIndex = 0) => {
         const maxPage = section.maxPagination || 1;
         for (let page = 1; page <= maxPage; page++) {
             Logger.info(`Fetching Page : ${page} of section ${section.subUrl}`);
-            await headLinePge.goto(BASE_LINK + section, { timeout: 30000 });
+            await headLinePge.goto(BASE_LINK + section, { timeout: PAGE_NAVIGATION_TIMEOUT });
             const headLinePgeContent = await headLinePge.content();
             if (!headLinePgeContent) continue;
             await parseHeadLinePage(headLinePgeContent);
@@ -73,10 +74,19 @@ const fetchSections = async (sectionIndex = 0) => {
 
 const parseHeadLinePage = async (pageContent) => {
     return new Promise((resolve) => {
-        Logger.info('parsing content');
-        $ = cheerio.default.load(pageContent);
+        Logger.info('parsing content'+ pageContent);
+        $ = cheerio.load(pageContent);
+        const mainContent = []; 
+        $(".main-container .main-content").children((children,index)=>{
+            mainContent.push(children);
+        })
+        console.log("maincontent length ",mainContent.length);
         resolve({ error: false });
     })
+}
+
+const fetchDetaildPage = async()=>{
+    Logger.info("fetching detail page..");
 }
 
 module.exports = { initializeScrapper };
