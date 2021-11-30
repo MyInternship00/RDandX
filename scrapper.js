@@ -14,7 +14,7 @@ const PUPPETEER_OPTIONS = {
 
 const MAX_RETRY = 5;
 const BASE_LINK = "https://www.firstpost.com/";
-const sections = [{subUrl:'/',maxPagination:5}, {subUrl:'/category/sports',maxPagination:5}, {subUrl:'/category/business',maxPagination:5}];
+const sections = [{ subUrl: '/', maxPagination: 5 }, { subUrl: '/category/sports', maxPagination: 5 }, { subUrl: '/category/business', maxPagination: 5 }];
 
 let BROWSER;
 let headLinePge;
@@ -46,36 +46,35 @@ const initializeScrapper = (async (attempt = 0) => {
     })
 });
 
-const fetchSections = async(sectionIndex=0)=>{
-    try{
-            const section = sections[sectionIndex];
-            if(!section.subUrl) fetchSections(++sectionIndex);
-            Logger.info(`Fetching section : ${section.subUrl}`);
-            const maxPage = section.maxPagination || 1;
-            for(let page=1;page<=maxPage;page++){
-                Logger.info(`Fetching Page : ${page} of section ${section.subUrl}`);
-                await headLinePge.goto(BASE_LINK+section,{ timeout: 30000});
-                const headLinePgeContent = await headLinePge.content();
-                if(!headLinePgeContent) continue;
-                await parseHeadLinePage(headLinePgeContent);
-            }
-            sectionIndex++;
-            if(sectionIndex>=sections.length){
-                return Logger.log('Fetched all sections');
-            }
-            fetchSections(sectionIndex);
-        
-    }catch(err){
+const fetchSections = async (sectionIndex = 0) => {
+    try {
+        if (sectionIndex > sections.length - 1) {
+            return Logger.info('Fetched all sections');
+        }
+        const section = sections[sectionIndex];
+        if (!section.subUrl) fetchSections(++sectionIndex);
+        Logger.info(`Fetching section : ${section.subUrl}`);
+        const maxPage = section.maxPagination || 1;
+        for (let page = 1; page <= maxPage; page++) {
+            Logger.info(`Fetching Page : ${page} of section ${section.subUrl}`);
+            await headLinePge.goto(BASE_LINK + section, { timeout: 30000 });
+            const headLinePgeContent = await headLinePge.content();
+            if (!headLinePgeContent) continue;
+            await parseHeadLinePage(headLinePgeContent);
+        }
+        fetchSections(++sectionIndex);
+
+    } catch (err) {
         Logger.error(err.message);
         fetchSections(++sectionIndex);
     }
 }
 
-const parseHeadLinePage = async (pageContent)=>{
-    return new Promise((resolve)=>{
+const parseHeadLinePage = async (pageContent) => {
+    return new Promise((resolve) => {
         Logger.info('parsing content');
         $ = cheerio.default.load(pageContent);
-        resolve({error:false});
+        resolve({ error: false });
     })
 }
 
