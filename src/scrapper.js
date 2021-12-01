@@ -2,6 +2,13 @@ const cheerio = require('cheerio');
 const puppeteer = require('puppeteer');
 const axios = require("axios");
 const Logger = require('./utils/logger');
+const { child } = require('./utils/logger');
+const { find } = require('domutils');
+const { children } = require('cheerio/lib/api/traversing');
+const { Logform } = require('winston');
+
+const { saveSection } = require('./utils/fileManagement');
+const { data } = require('cheerio/lib/api/attributes');
 
 const PAGE_NAVIGATION_TIMEOUT = 30000; 
 
@@ -59,10 +66,11 @@ const fetchSections = async (sectionIndex = 0) => {
         const maxPage = section.maxPagination || 1;
         for (let page = 1; page <= maxPage; page++) {
             Logger.info(`Fetching Page : ${page} of section ${section.subUrl}`);
-            await headLinePge.goto(BASE_LINK + section, { timeout: PAGE_NAVIGATION_TIMEOUT });
+            await headLinePge.goto(BASE_LINK + section.subUrl, { timeout: PAGE_NAVIGATION_TIMEOUT });
             const headLinePgeContent = await headLinePge.content();
             if (!headLinePgeContent) continue;
-            await parseHeadLinePage(headLinePgeContent);
+            console.log(section);
+            await parseHeadLinePage(headLinePgeContent, section.subUrl);
         }
         fetchSections(++sectionIndex);
 
@@ -72,21 +80,42 @@ const fetchSections = async (sectionIndex = 0) => {
     }
 }
 
-const parseHeadLinePage = async (pageContent) => {
-    return new Promise((resolve) => {
-        Logger.info('parsing content'+ pageContent);
+const parseHeadLinePage = async (pageContent, url) => {
+    return new Promise( async (resolve) => {
         $ = cheerio.load(pageContent);
-        const mainContent = []; 
-        $(".main-container .main-content").children((children,index)=>{
-            mainContent.push(children);
-        })
-        console.log("maincontent length ",mainContent.length);
+
+        let sectionData = {};
+
+        if(url == '/'){
+            sectionData['category'] = 'mainPage'; 
+            sectionData['posts'] = [];
+        }
+
+        $('#home-wrapper .container .main-container .main-content').children((i, el) => {
+            if($(el).attr('class') == 'big-thumb'){
+                temp = {}
+                $(el).children((j, data) => {
+                    if($(data).attr('class') == 'thumb-img'){
+                        temp['link'] = $(data).attr('href');
+                        temp['img'] = $(data).find('img').attr("src");
+                    } else if ($(data).attr('class') == 'title-wrap'){
+                        temp['title'] = $(data).find('.main-title a').text().trim();
+                        temp['desc'] = $(data).find('.copy').text().trim();
+                    }
+                })
+
+                sectionData.posts.push(temp);
+            }   
+        });
+
+        await saveSection(sectionData);
+        
         resolve({ error: false });
     })
 }
 
 const fetchDetaildPage = async()=>{
-    Logger.info("fetching detail page..");
+    Logger.info("fetching detail page...");
 }
 
 module.exports = { initializeScrapper };
