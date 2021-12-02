@@ -2,15 +2,12 @@ const cheerio = require('cheerio');
 const puppeteer = require('puppeteer');
 const axios = require("axios");
 const Logger = require('./utils/logger');
-const { child } = require('./utils/logger');
-const { find } = require('domutils');
-const { children } = require('cheerio/lib/api/traversing');
 const { Logform } = require('winston');
 
 const { saveSection } = require('./utils/fileManagement');
 const { data } = require('cheerio/lib/api/attributes');
 
-const PAGE_NAVIGATION_TIMEOUT = 30000; 
+const PAGE_NAVIGATION_TIMEOUT = 60000; 
 
 const PUPPETEER_OPTIONS = {
     headers: {
@@ -21,7 +18,8 @@ const PUPPETEER_OPTIONS = {
 };
 
 const MAX_RETRY = 5;
-const BASE_LINK = "https://www.firstpost.com/";
+const proxy = "http://api.scraperapi.com?api_key=14c83cf789dc07a9ee0a715f00668dad?url="
+const BASE_LINK = `https://www.firstpost.com`;
 const sections = [{ subUrl: '/', maxPagination: 1 }, { subUrl: '/category/sports', maxPagination: 1 }, { subUrl: '/category/business', maxPagination: 5 }];
 
 let BROWSER;
@@ -58,7 +56,7 @@ const fetchSections = async (sectionIndex = 0) => {
     try {
         if (sectionIndex > sections.length - 1) {
              Logger.info('Fetched all sections');
-             return process.exit(0);
+             return;
         }
         const section = sections[sectionIndex];
         if (!section.subUrl) fetchSections(++sectionIndex);
@@ -66,13 +64,18 @@ const fetchSections = async (sectionIndex = 0) => {
         const maxPage = section.maxPagination || 1;
         for (let page = 1; page <= maxPage; page++) {
             Logger.info(`Fetching Page : ${page} of section ${section.subUrl}`);
-            await headLinePge.goto(BASE_LINK + section.subUrl, { timeout: PAGE_NAVIGATION_TIMEOUT });
+            let link = BASE_LINK + section.subUrl;
+            if(section.subUrl == "/category/business"){
+                link = `${link}/page/${page}`;
+            }
+            console.log("THE PAGE LINK IS : " , link);
+
+            await headLinePge.goto(link , { timeout: PAGE_NAVIGATION_TIMEOUT });
             const headLinePgeContent = await headLinePge.content();
             if (!headLinePgeContent) continue;
-            console.log(section);
-            await parseHeadLinePage(headLinePgeContent, section.subUrl);
+            await parseHeadLinePage(headLinePgeContent, section.subUrl, page);
         }
-        fetchSections(++sectionIndex);
+        await fetchSections(++sectionIndex);
 
     } catch (err) {
         Logger.error(err.message);
@@ -80,18 +83,25 @@ const fetchSections = async (sectionIndex = 0) => {
     }
 }
 
-const parseHeadLinePage = async (pageContent, url) => {
+const parseHeadLinePage = async (pageContent, url, pageNo) => {
     return new Promise( async (resolve) => {
         $ = cheerio.load(pageContent);
 
         let sectionData = {};
 
         if(url == '/'){
-            sectionData['category'] = 'mainPage'; 
-            sectionData['posts'] = [];
+            url = "news"
+            sectionData['category'] = url; 
+        } else {
+            url = url.replace("/category/", "");
+            if (url == "business") url = url + "-" + pageNo;
+            sectionData['category'] = url;
         }
 
-        $('#home-wrapper .container .main-container .main-content').children((i, el) => {
+        sectionData['posts'] = [];
+
+
+        $('.container .main-container .main-content').children((i, el) => {
             if($(el).attr('class') == 'big-thumb'){
                 temp = {}
                 $(el).children((j, data) => {
@@ -103,12 +113,11 @@ const parseHeadLinePage = async (pageContent, url) => {
                         temp['desc'] = $(data).find('.copy').text().trim();
                     }
                 })
-
                 sectionData.posts.push(temp);
             }   
         });
-
-        await saveSection(sectionData);
+        
+        await saveSection(sectionData, url);
         
         resolve({ error: false });
     })
