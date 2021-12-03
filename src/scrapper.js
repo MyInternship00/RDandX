@@ -6,15 +6,16 @@ const { Logform } = require('winston');
 
 const { saveSection } = require('./utils/fileManagement');
 const { data } = require('cheerio/lib/api/attributes');
-
-const PAGE_NAVIGATION_TIMEOUT = 60000; 
+const {fetchImage} = require('./utils/imageFetcher');
+const PAGE_NAVIGATION_TIMEOUT = 0; 
+const WaitUntil = 'load';
 
 const PUPPETEER_OPTIONS = {
     headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36'
     },
     ignoreHTTPSErrors: true,
-    headless: true,
+    headless: false,
 };
 
 const MAX_RETRY = 5;
@@ -70,7 +71,7 @@ const fetchSections = async (sectionIndex = 0) => {
             }
             console.log("THE PAGE LINK IS : " , link);
 
-            await headLinePge.goto(link , { timeout: PAGE_NAVIGATION_TIMEOUT });
+            await headLinePge.goto(link , {waitUntil:WaitUntil, timeout: PAGE_NAVIGATION_TIMEOUT });
             const headLinePgeContent = await headLinePge.content();
             if (!headLinePgeContent) continue;
             await parseHeadLinePage(headLinePgeContent, section.subUrl, page);
@@ -99,32 +100,75 @@ const parseHeadLinePage = async (pageContent, url, pageNo) => {
         }
 
         sectionData['posts'] = [];
+        const elArray = [];
 
 
-        $('.container .main-container .main-content').children((i, el) => {
-            if($(el).attr('class') == 'big-thumb'){
-                temp = {}
-                $(el).children((j, data) => {
-                    if($(data).attr('class') == 'thumb-img'){
-                        temp['link'] = $(data).attr('href');
-                        temp['img'] = $(data).find('img').attr("src");
-                    } else if ($(data).attr('class') == 'title-wrap'){
-                        temp['title'] = $(data).find('.main-title a').text().trim();
-                        temp['desc'] = $(data).find('.copy').text().trim();
-                    }
-                })
-                sectionData.posts.push(temp);
-            }   
+        $('.container .main-container .main-content').children(async(i, el) => {
+           elArray.push(el);   
         });
         
-        await saveSection(sectionData, url);
+        for(let i=0;i<elArray.length;i++){
+            const el = elArray[i];
+            if($(el).attr('class') == 'big-thumb'){
+                temp = {}
+                const subElArray = [];
+
+                $(el).children(async (j, data) => {
+                   subElArray.push(data);
+                })
+                for(let j = 0;j<subElArray.length;j++){
+                    let data = subElArray[j];
+                    if($(data).attr('class') == 'thumb-img'){
+                        temp['link'] = $(data).attr('href');
+                        const imgLink = $(data).find('img').attr("src");
+                        console.log("image link is ",imgLink);
+                        const imgBlob = await fetchImage(imgLink);
+                        if(imgBlob) temp['img'] =imgBlob;
+                    } else if ($(data).attr('class') == 'title-wrap'){
+                        temp['title'] = $(data).find('.main-title a').text().trim();
+                        temp['briefDesc'] = $(data).find('.copy').text().trim();
+                    }
+                }
+                console.log(temp['img']);
+                console.log("detail page starts");
+                let fullDesc = await fetchFullDescription(temp.link);
+                temp['fullDescription']=fullDesc;
+                sectionData.posts.push(temp);
+            }
+        }
+        // await saveSection(sectionData, url);
         
         resolve({ error: false });
     })
 }
 
-const fetchDetaildPage = async()=>{
-    Logger.info("fetching detail page...");
+const fetchFullDescription = async(link)=>{
+    return new Promise(async (resolve)=>{
+        Logger.info("fetching detail page...");
+        if(!link) return 'No description';
+       await detailedPage.goto(link,{waitUntil:WaitUntil,timeout:PAGE_NAVIGATION_TIMEOUT});
+       let detailPageContent = await detailedPage.content();
+        const data = await scrapDetailPage(detailPageContent);
+        resolve(data);
+    })
+
+}
+
+const scrapDetailPage=async(content)=>{
+    return new Promise((resolve)=>{
+        const $ = cheerio.load(content);
+        let authorName = $('.author-info').find("a .article-by").text();
+        if(authorName) authorName = authorName.trim();
+        let postDate = $('.author-info').find("span").text();
+        if(postDate) postDate = postDate.trim();
+        let descArray = [];
+        $(".article-full-content").children((i,p)=>{
+            let para  = $(p).text();
+            if(para) descArray.push(para);
+        })
+        resolve({authorName,postDate,descArray});
+    })
+  
 }
 
 module.exports = { initializeScrapper };
