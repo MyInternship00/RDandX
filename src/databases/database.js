@@ -1,25 +1,34 @@
 const config = require('config');
 const mongoose = require('mongoose');
 const Logger = require('../utils/logger');
-const { connectionString } = config.get('dbConfig');
+const dbConfig = config.get('dbConfig');
 
 const dbConnection = {
-    uri: connectionString,
+    uri: dbConfig.dbAcess == 'local'?dbConfig.connectionString:dbConfig.cludConnectionString,
     options: {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
     },
 };
 
 const connectDatabase = async () => {
     new Promise((resolve) => {
-        Logger.info("connecting database...");
+        Logger.info(`connecting database: ${dbConnection.uri}`);
         try {
-            const db = mongoose.createConnection(dbConnection.uri, dbConnection.options);
-            db.on("error", dbErrorHandler);
-            db.once("open", () => {
-                Logger.info("Database connected");
-                resolve({ error: false });
+            mongoose
+            .connect(dbConnection.uri, dbConnection.options)
+            .then(x => {
+              Logger.info(
+                `Connected to Mongo! Database name: "${x.connections[0].name}"`
+              );
+              resolve({ error: false });
+
+
+            })
+            .catch(err => {
+              Logger.error("Error connecting to mongo", err);
+              resolve({ error: true });
+
             });
         }
         catch (err) {
