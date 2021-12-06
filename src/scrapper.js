@@ -15,7 +15,7 @@ const PUPPETEER_OPTIONS = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36'
     },
     ignoreHTTPSErrors: true,
-    headless: false,
+    headless: true,
 };
 
 const MAX_RETRY = 5;
@@ -70,7 +70,6 @@ const fetchSections = async (sectionIndex = 0) => {
                 link = `${link}/page/${page}`;
             }
             console.log("THE PAGE LINK IS : " , link);
-
             await headLinePge.goto(link , {waitUntil:WaitUntil, timeout: PAGE_NAVIGATION_TIMEOUT });
             const headLinePgeContent = await headLinePge.content();
             if (!headLinePgeContent) continue;
@@ -121,6 +120,7 @@ const parseHeadLinePage = async (pageContent, url, pageNo) => {
                     if($(data).attr('class') == 'thumb-img'){
                         temp['link'] = $(data).attr('href');
                         const imgLink = $(data).find('img').attr("src");
+                        // temp['image'] = imgLink;
                         console.log("image link is ",imgLink);
                         const imgBlob = await fetchImage(imgLink);
                         if(imgBlob) temp['img'] =imgBlob;
@@ -129,13 +129,12 @@ const parseHeadLinePage = async (pageContent, url, pageNo) => {
                         temp['briefDesc'] = $(data).find('.copy').text().trim();
                     }
                 }
-                console.log(temp['img']);
-                console.log("detail page starts");
                 let fullDesc = await fetchFullDescription(temp.link);
                 temp['fullDescription']=fullDesc;
                 sectionData.posts.push(temp);
             }
         }
+
         // await saveSection(sectionData, url);
         
         resolve({ error: false });
@@ -146,8 +145,8 @@ const fetchFullDescription = async(link)=>{
     return new Promise(async (resolve)=>{
         Logger.info("fetching detail page...");
         if(!link) return 'No description';
-       await detailedPage.goto(link,{waitUntil:WaitUntil,timeout:PAGE_NAVIGATION_TIMEOUT});
-       let detailPageContent = await detailedPage.content();
+        await detailedPage.goto(link,{waitUntil:WaitUntil,timeout:PAGE_NAVIGATION_TIMEOUT});
+        let detailPageContent = await detailedPage.content();
         const data = await scrapDetailPage(detailPageContent);
         resolve(data);
     })
@@ -157,7 +156,12 @@ const fetchFullDescription = async(link)=>{
 const scrapDetailPage=async(content)=>{
     return new Promise((resolve)=>{
         const $ = cheerio.load(content);
+
         let authorName = $('.author-info').find("a .article-by").text();
+        if(authorName == ""){
+            authorName = $(".article-sect").find('.article-details-wrap > .article-details-list > li:nth-child(1)').text().trim();
+            console.log("AUTHOR NAME : ", authorName);
+        }
         if(authorName) authorName = authorName.trim();
         let postDate = $('.author-info').find("span").text();
         if(postDate) postDate = postDate.trim();
@@ -166,6 +170,7 @@ const scrapDetailPage=async(content)=>{
             let para  = $(p).text();
             if(para) descArray.push(para);
         })
+
         resolve({authorName,postDate,descArray});
     })
   
